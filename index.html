@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ART2.4 – Mierenschilderij met vier mieren</title>
+<style>
+:root{color-scheme:dark;--text:#f2f4f7;--muted:#aab3c0;--border:#424b58;--card:#252c36;--panel:#171c24}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:#10141a;color:var(--text);font:14px system-ui,sans-serif}
+#art233{width:min(100%,720px);margin:auto}
+button{padding:10px 5px;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:650;font-size:13px;cursor:pointer}
+button.main{background:#477eea;color:#fff;border-color:#477eea}
+.counts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:9px}
+.counts>div{text-align:center;padding:8px 2px;border:1px solid var(--border);border-radius:8px}
+.counts b{display:block;color:var(--text);font-size:13px;margin-top:2px}
+.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px}
+.setting{margin-top:13px}
+.setting label{display:flex;justify-content:space-between;gap:8px;font-weight:600;margin-bottom:5px}
+input[type=range]{width:100%;accent-color:#477eea}
+.subtle{color:var(--muted);font-size:12px}
+canvas{width:100%;max-width:640px;aspect-ratio:1;display:block;margin:auto;border-radius:8px;background:#000;image-rendering:pixelated}
+</style>
+</head>
+<body>
+<div id="art233">
+<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:6px"><b>500 × 500 vakjes</b><span id="a233status" class="subtle">Gepauzeerd</span></div>
+<canvas id="a233canvas" width="500" height="500"></canvas>
+<div class="counts" title="De tellers tonen afgegeven pigmentbeurten, niet loopstappen.">
+<div><span style="color:#55bcd5">● Cyaan</span><b class="a233count">0</b></div>
+<div><span style="color:#d64ba5">● Magenta</span><b class="a233count">0</b></div>
+<div><span style="color:#c6a631">● Geel</span><b class="a233count">0</b></div>
+<div>● Zwart<b class="a233count">0</b></div>
+</div>
+<div class="controls">
+<button id="a233start" class="main">▶ Start</button><button id="a233pause">Ⅱ Pauze</button><button id="a233reset">↻ Reset</button>
+</div>
+<button id="a233new" style="width:100%;margin-top:7px">✦ Nieuwe compositie</button>
+<div style="display:flex;justify-content:space-between;margin-top:13px"><b>Beschilderd oppervlak</b><b id="a233coverage">0,00%</b></div>
+<div style="height:8px;background:var(--panel);border-radius:8px;overflow:hidden;margin-top:5px"><div id="a233bar" style="height:100%;width:0%;background:#75c9a9"></div></div>
+<div class="setting"><label><span>Snelheid per mier</span><span id="a233speedv">3.000 stappen/sec</span></label><input id="a233speed" type="range" min="250" max="10000" step="250" value="3000"></div>
+<div class="setting"><label><span>Architectuur</span><span id="a233archv">85%</span></label><input id="a233arch" type="range" min="0" max="100" value="85"></div>
+<div class="setting"><label><span>Rafelige randen</span><span id="a233roughv">65%</span></label><input id="a233rough" type="range" min="0" max="100" value="65"></div>
+<div class="setting"><label><span>Kleurkracht</span><span id="a233colorv">90%</span></label><input id="a233color" type="range" min="20" max="100" value="90"></div>
+<div class="setting"><label><span>Donker-zwart</span><span id="a233blackv">100%</span></label><input id="a233black" type="range" min="0" max="100" value="100"></div>
+<div class="setting"><label><span>Vlakken: veel &amp; klein ↔ weinig &amp; groot</span><span id="a233patchmixv">120 vlakken · 133%</span></label><input id="a233patchmix" type="range" min="0" max="100" step="1" value="50"></div>
+<div class="setting"><label><span>Hooglichten</span><span id="a233lightv">75%</span></label><input id="a233light" type="range" min="0" max="100" value="75"></div>
+<button id="a233save" style="width:100%;margin-top:15px">↓ Bewaar als PNG</button>
+<p id="a233message" class="subtle">Alle vier de mieren gebruiken dezelfde rechthoekdoelen en verfbeurten. De schuif koppelt het aantal en de grootte van de vlakken: links veel kleine vlakken, rechts minder grote. De tellers tonen afgegeven pigmentbeurten, niet loopstappen.</p>
+</div>
+<script>
+(()=>{
+const root=document.getElementById('art233');if(root.dataset.ready)return;root.dataset.ready='1';
+const E=id=>root.querySelector('#'+id),N=500,T=N*N;
+const canvas=E('a233canvas'),ctx=canvas.getContext('2d',{alpha:false}),image=ctx.createImageData(N,N),data=image.data;
+const plans=new Uint8Array(T*4),edges=new Uint8Array(T),lights=new Uint8Array(T);
+const pigments=new Uint8Array(T*4),painted=new Uint8Array(T);
+const antPos=new Int32Array(4),antDir=new Int8Array(4),counts=new Uint32Array(4);
+const colors=['#54e8fa','#fa4fc9','#ffe34c','#111111'];
+const dx=[0,1,0,-1],dy=[-1,0,1,0];
+let rectangles=[],rand=Math.random,running=false,lastTime=0,accumulator=0,filled=0;
+let settings={speed:3000,arch:.85,rough:.65,color:.9,black:1,light:.75,patchMix:.5};
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+function patchProfile(){const v=settings.patchMix;return{count:Math.round(150-90*v),scale:.95+.65*v};}
+function makeRng(seed){return()=>{seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return(seed>>>0)/4294967296;};}
+function makeSeed(){try{let v=new Uint32Array(1);crypto.getRandomValues(v);return v[0]||1;}catch(e){return(Math.random()*4294967295)>>>0||1;}}
+function makeComposition(){
+rand=makeRng(makeSeed());plans.fill(0);edges.fill(0);lights.fill(0);rectangles=[];
+const profile=patchProfile();
+for(let n=0;n<profile.count;n++){const w=Math.min(N-1,Math.max(8,Math.round((15+rand()*80)*profile.scale))),h=Math.min(N-1,Math.max(8,Math.round((20+rand()*110)*profile.scale))),x=Math.floor(rand()*(N-w)),y=Math.floor(rand()*(N-h));rectangles.push({x,y,w,h,type:Math.floor(rand()*4),power:145+Math.floor(rand()*111)});}
+for(const r of rectangles){for(let y=r.y;y<r.y+r.h;y++){let j=y*N+r.x;for(let x=r.x;x<r.x+r.w;x++,j++){const p=j*4+r.type;if(r.power>plans[p])plans[p]=r.power;const d=Math.min(x-r.x,r.x+r.w-1-x,y-r.y,r.y+r.h-1-y);if(d<9)edges[j]=Math.max(edges[j],Math.round(255*(1-d/9)));}}}
+const cores=plans.slice();for(let y=0;y<N;y++)for(let x=0;x<N;x++){const j=y*N+x;for(let a=0;a<4;a++){if(cores[j*4+a])continue;let bleed=0;for(let oy=-2;oy<=2;oy++)for(let ox=-2;ox<=2;ox++){if(!ox&&!oy)continue;const xx=x+ox,yy=y+oy;if(xx<0||xx>=N||yy<0||yy>=N)continue;const dist=Math.max(Math.abs(ox),Math.abs(oy)),v=cores[(yy*N+xx)*4+a]*(dist===1?.22:.08);if(v>bleed)bleed=v;}plans[j*4+a]=Math.round(bleed);}}
+for(let k=0;k<38;k++){const r=rectangles[Math.floor(rand()*rectangles.length)],w=4+Math.floor(rand()*Math.max(4,r.w*.4)),h=4+Math.floor(rand()*Math.max(4,r.h*.25)),x=r.x+Math.floor(rand()*Math.max(1,r.w-w)),y=r.y+Math.floor(rand()*Math.max(1,r.h-h));for(let yy=y;yy<Math.min(N,y+h);yy++)for(let xx=x;xx<Math.min(N,x+w);xx++){const j=yy*N+xx;lights[j]=Math.max(lights[j],175+Math.floor(rand()*80));}}
+}
+function reset(){
+running=false;lastTime=0;accumulator=0;filled=0;pigments.fill(0);painted.fill(0);counts.fill(0);
+antPos[0]=125*N+125;antPos[1]=125*N+375;antPos[2]=375*N+125;antPos[3]=375*N+375;antDir.set([1,2,0,3]);
+for(let j=0;j<T;j++){const p=j*4;data[p]=22;data[p+1]=22;data[p+2]=22;data[p+3]=255;}
+draw();update();
+}
+function neighbor(j,d){let x=j%N,y=(j/N)|0;x+=dx[d];y+=dy[d];if(x<0)x=N-1;else if(x>=N)x=0;if(y<0)y=N-1;else if(y>=N)y=0;return y*N+x;}
+function desire(a,j){return plans[j*4+a]/255*.92;}
+function paint(a,j){const idx=j*4+a,target=desire(a,j)*255;if(pigments[idx]>=target||rand()>.78)return false;pigments[idx]=Math.min(255,Math.min(target,pigments[idx]+26));counts[a]++;if(!painted[j]){painted[j]=1;filled++;}return true;}
+function step(a){
+const old=antPos[a],direction=antDir[a],options=[0,0,0,0];let total=0;
+for(let d=0;d<4;d++){const j=neighbor(old,d),amount=pigments[j*4+a]/255;let score=.12+Math.max(0,desire(a,j)-amount)*5;if(d===direction)score*=1+settings.arch*1.8;if(d%2===direction%2)score*=1+settings.arch*.25;score*=.8+rand()*.4;options[d]=score;total+=score;}
+let pick=rand()*total,chosen=direction;for(let d=0;d<4;d++){pick-=options[d];if(pick<=0){chosen=d;break;}}
+const next=neighbor(old,chosen);antPos[a]=next;antDir[a]=chosen;if(paint(a,next))return next;return -1;
+}
+function recolor(j){
+const p=j*4;
+const c=pigments[p]/255*settings.color,m=pigments[p+1]/255*settings.color,y=pigments[p+2]/255*settings.color,k=clamp(Math.pow(pigments[p+3]/(255*.92),.75)*settings.black),peak=Math.max(c,m,y),brightness=.09+Math.min(1,peak*1.65)*.91;
+let r=(1-c)*(1-k)*brightness,g=(1-m)*(1-k)*brightness,b=(1-y)*(1-k)*brightness;
+const light=lights[j]/255*settings.light*Math.min(1,peak*1.4);r=clamp(r+light*(.55+.45*r));g=clamp(g+light*(.55+.45*g));b=clamp(b+light*(.55+.45*b));
+data[p]=Math.round(r*255);data[p+1]=Math.round(g*255);data[p+2]=Math.round(b*255);
+}
+function draw(){ctx.putImageData(image,0,0);ctx.save();for(let a=0;a<4;a++){const j=antPos[a],x=j%N,y=(j/N)|0;ctx.fillStyle=colors[a];ctx.strokeStyle='#fff';ctx.lineWidth=1.3;ctx.beginPath();ctx.arc(x+.5,y+.5,a===3?3.5:3,0,Math.PI*2);ctx.fill();ctx.stroke();}ctx.restore();}
+function update(){root.querySelectorAll('.a233count').forEach((el,a)=>el.textContent=counts[a].toLocaleString('nl-BE'));const percent=filled/T*100;E('a233coverage').textContent=percent.toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';E('a233bar').style.width=percent+'%';E('a233bar').parentElement.setAttribute('aria-valuenow',percent.toFixed(1));E('a233status').textContent=running?'● Actief':'Gepauzeerd';}
+function frame(time){if(!root.isConnected)return;const dt=lastTime?Math.min(.05,(time-lastTime)/1000):.016;lastTime=time;if(running){accumulator+=settings.speed*dt;const batches=Math.min(1200,Math.floor(accumulator));accumulator-=batches;for(let n=0;n<batches;n++)for(let a=0;a<4;a++){const j=step(a);if(j>=0)recolor(j);}draw();update();}requestAnimationFrame(frame);}
+E('a233start').onclick=()=>{running=true;lastTime=0;update();};
+E('a233pause').onclick=()=>{running=false;draw();update();};
+E('a233reset').onclick=reset;
+E('a233new').onclick=()=>{makeComposition();reset();E('a233message').textContent='Nieuwe compositie klaar. De vier mieren delen dezelfde vlakinstelling. Druk op Start.';};
+for(const id of ['speed','arch','rough','color','light'])E('a233'+id).oninput=e=>{const val=+e.target.value;settings[id]=id==='speed'?val:val/100;E('a233'+id+'v').textContent=id==='speed'?val.toLocaleString('nl-BE')+' stappen/sec':val+'%';if(['color','light'].includes(id)){for(let j=0;j<T;j++)if(painted[j])recolor(j);draw();}};
+E('a233patchmix').oninput=e=>{settings.patchMix=+e.target.value/100;makeComposition();const p=patchProfile();E('a233patchmixv').textContent=p.count+' vlakken · '+Math.round(p.scale*100)+'%';for(let j=0;j<T;j++)if(painted[j])recolor(j);draw();E('a233message').textContent='Dezelfde instelling geldt nu voor alle vier de mieren. Bestaande verf blijft staan; de doelvlakken zijn vernieuwd.';};
+E('a233black').oninput=e=>{settings.black=+e.target.value/100;E('a233blackv').textContent=e.target.value+'%';for(let j=0;j<T;j++)if(painted[j])recolor(j);draw();};
+E('a233save').onclick=()=>{const c=document.createElement('canvas');c.width=c.height=N;c.getContext('2d').putImageData(image,0,0);c.toBlob(blob=>{if(!blob){E('a233message').textContent='PNG kon niet worden gemaakt.';return;}const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ART2.4-'+Date.now()+'.png';document.body.appendChild(a);a.click();a.remove();E('a233message').textContent='PNG aangemaakt. Kijk in Bestanden → Downloads.';setTimeout(()=>URL.revokeObjectURL(url),30000);},'image/png');};
+makeComposition();const p=patchProfile();E('a233patchmixv').textContent=p.count+' vlakken · '+Math.round(p.scale*100)+'%';reset();requestAnimationFrame(frame);
+})();
+</script>
